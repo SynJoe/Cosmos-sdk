@@ -25,6 +25,11 @@ type Info interface {
 	GetPath() (*hd.BIP44Params, error)
 	// Algo
 	GetAlgo() hd.PubKeyType
+	// A label for this key which allows it to be retrieved from
+	// non-resident storage (HSM)
+	GetLabel() string
+	// Configuration path for non-resident storage
+	GetConfigPath() string
 }
 
 var (
@@ -83,6 +88,14 @@ func (i localInfo) GetPath() (*hd.BIP44Params, error) {
 	return nil, fmt.Errorf("BIP44 Paths are not available for this type")
 }
 
+func (i localInfo) GetLabel() string {
+	return ""
+}
+
+func (i localInfo) GetConfigPath() string {
+	return ""
+}
+
 // hsmInfo contains the public information about an HSM-resident key
 
 type hsmInfo struct {
@@ -94,7 +107,7 @@ type hsmInfo struct {
 }
 
 // newHsmInfo returns an info record with the given HSM details filled out. 
-func newHsmInfo(name string, pub cryptotypes.PubKey, label string, configPath string, algo hd.PubKeyType) *hsmInfo{
+func newHsmInfo(name string, pub cryptotypes.PubKey, label string, configPath string, algo hd.PubKeyType) Info{
 	return &hsmInfo{
 		Name:   name,
 		PubKey: pub,
@@ -106,7 +119,7 @@ func newHsmInfo(name string, pub cryptotypes.PubKey, label string, configPath st
 
 // GetType implements Info interface
 func (i hsmInfo) GetType() KeyType {
-	return TypeLedger
+	return TypeHsm
 }
 
 // GetName implements Info interface
@@ -191,6 +204,14 @@ func (i ledgerInfo) GetPath() (*hd.BIP44Params, error) {
 	return &tmp, nil
 }
 
+func (i ledgerInfo) GetLabel() string {
+	return ""
+}
+
+func (i ledgerInfo) GetConfigPath() string {
+	return ""
+}
+
 // offlineInfo is the public information about an offline key
 // Note: Algo must be last field in struct for backwards amino compatibility
 type offlineInfo struct {
@@ -235,6 +256,14 @@ func (i offlineInfo) GetAddress() types.AccAddress {
 // GetPath implements Info interface
 func (i offlineInfo) GetPath() (*hd.BIP44Params, error) {
 	return nil, fmt.Errorf("BIP44 Paths are not available for this type")
+}
+
+func (i offlineInfo) GetLabel() string {
+	return ""
+}
+
+func (i offlineInfo) GetConfigPath() string {
+	return ""
 }
 
 // Deprecated: this structure is not used anymore and it's here only to allow
@@ -295,6 +324,14 @@ func (i multiInfo) GetPath() (*hd.BIP44Params, error) {
 	return nil, fmt.Errorf("BIP44 Paths are not available for this type")
 }
 
+func (i multiInfo) GetLabel() string {
+	return ""
+}
+
+func (i multiInfo) GetConfigPath() string {
+	return ""
+}
+
 // UnpackInterfaces implements UnpackInterfacesMessage.UnpackInterfaces
 func (i multiInfo) UnpackInterfaces(unpacker codectypes.AnyUnpacker) error {
 	multiPK := i.PubKey.(*multisig.LegacyAminoPubKey)
@@ -311,6 +348,7 @@ func marshalInfo(i Info) []byte {
 func unmarshalInfo(bz []byte) (info Info, err error) {
 	err = legacy.Cdc.UnmarshalBinaryLengthPrefixed(bz, &info)
 	if err != nil {
+		fmt.Printf("ERROR unmarshalling info struct\n")
 		return nil, err
 	}
 

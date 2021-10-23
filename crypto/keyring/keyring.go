@@ -81,7 +81,7 @@ type Keyring interface {
 	SaveLedgerKey(uid string, algo SignatureAlgo, hrp string, coinType, account, index uint32) (Info, error)
 
 	// SaveHsmKey retrieves a public key reference from a PKCS11 device, such as an HSM, ran persists it
-	SaveHsmKey(uid string, algo SignatureAlgo, label string, configPath string) (*hsmInfo, error)
+	SaveHsmKey(uid string, algo SignatureAlgo, label string, configPath string) (Info, error)
 
 	// SavePubKey stores a public key and returns the persisted Info structure.
 	SavePubKey(uid string, pubkey types.PubKey, algo hd.PubKeyType) (Info, error)
@@ -392,7 +392,7 @@ func (ks keystore) SignByAddress(address sdk.Address, msg []byte) ([]byte, types
 // keyring backend.
 // the config path is passed in, so anyone using this key must also have access
 // to the HSM that contains the key with that label
-func (ks keystore) SaveHsmKey(uid string, algo SignatureAlgo, label string, configPath string) (*hsmInfo, error) {
+func (ks keystore) SaveHsmKey(uid string, algo SignatureAlgo, label string, configPath string) (Info, error) {
 	if !ks.options.SupportedAlgosHsm.Contains(algo) {
 		return nil, fmt.Errorf(
 			"%w: signature algo %s is not defined in the keyring options",
@@ -419,7 +419,7 @@ func (ks keystore) SaveHsmKey(uid string, algo SignatureAlgo, label string, conf
 
 // writeHsm creates a new Hsm Info object containing the key label
 // for the private key, and the actual Cosmos keyring PubKey
-func (ks keystore) writeHsmKey(name string, pub types.PubKey, label string, configPath string, algo SignatureAlgo) (*hsmInfo, error) {
+func (ks keystore) writeHsmKey(name string, pub types.PubKey, label string, configPath string, algo SignatureAlgo) (Info, error) {
 	k := newHsmInfo(name, pub, label, configPath, algo.Name())
 	return k, ks.writeInfo(k)
 }
@@ -650,36 +650,36 @@ func SignWithLedger(info Info, msg []byte) (sig []byte, pub types.PubKey, err er
 	return sig, priv.PubKey(), nil
 }
 
-func SignWithHsm(info *hsmInfo, msg []byte) (sig []byte, pub types.PubKey, err error) {
-	//	switch hsminfo := info.(type) {
-	//case *hsmInfo, hsmInfo:
+func SignWithHsm(info Info, msg []byte) (sig []byte, pub types.PubKey, err error) {
+	switch info.(type) {
+	case *hsmInfo, hsmInfo:
 
-	label := info.GetLabel()
+		label := info.GetLabel()
+		
+		configPath := info.GetConfigPath()
+		
+		kr, err := hsmkeys.NewPkcs11FromConfig(configPath)
+		
+		if err != nil {
+			return nil, nil, err
+		}
+		
+		priv, err := kr.Key(label)
+		
+		if err != nil {
+			return nil, nil, err
+		}
+		
+		signed, err := priv.Sign(msg, nil)
 	
-	configPath := info.GetConfigPath()
-	
-	kr, err := hsmkeys.NewPkcs11FromConfig(configPath)
-	
-	if err != nil {
-		return nil, nil, err
-	}
-	
-	priv, err := kr.Key(label)
-	
-	if err != nil {
-		return nil, nil, err
-	}
-	
-	signed, err := priv.Sign(msg, nil)
-	
-	if err != nil {
-		return nil, nil, err
-	}
-	
-	return signed, priv.PubKey(), nil
-	//default:
+		if err != nil {
+			return nil, nil, err
+		}
+		
+		return signed, priv.PubKey(), nil
+	default:
 		return nil, nil, errors.New("not an HSM object")
-	//}
+	}
 }
 
 func newOSBackendKeyringConfig(appName, dir string, buf io.Reader) keyring.Config {
