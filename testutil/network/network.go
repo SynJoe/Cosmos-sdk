@@ -277,7 +277,7 @@ func New(t *testing.T, cfg Config) *Network {
 		kb, err := keyring.New(sdk.KeyringServiceName(), keyring.BackendTest, clientDir, buf, cfg.KeyringOptions...)
 		require.NoError(t, err)
 
-		keyringAlgos, _ := kb.SupportedAlgorithms()
+		keyringAlgos, _, _ := kb.SupportedAlgorithms()
 		algo, err := keyring.NewSigningAlgoFromString(cfg.SigningAlgo, keyringAlgos)
 		require.NoError(t, err)
 
