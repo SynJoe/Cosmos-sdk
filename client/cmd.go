@@ -165,6 +165,11 @@ func readQueryCommandFlags(clientCtx Context, flagSet *pflag.FlagSet) (Context, 
 		useLedger, _ := flagSet.GetBool(flags.FlagUseLedger)
 		clientCtx = clientCtx.WithUseLedger(useLedger)
 	}
+	
+	if !clientCtx.UseHsm || flagSet.Changed(flags.FlagUseHsm) {
+		useHsm, _ := flagSet.GetBool(flags.FlagUseHsm)
+		clientCtx = clientCtx.WithUseHsm(useHsm)
+	}
 
 	return ReadPersistentCommandFlags(clientCtx, flagSet)
 }
@@ -198,6 +203,11 @@ func readTxCommandFlags(clientCtx Context, flagSet *pflag.FlagSet) (Context, err
 	if !clientCtx.UseLedger || flagSet.Changed(flags.FlagUseLedger) {
 		useLedger, _ := flagSet.GetBool(flags.FlagUseLedger)
 		clientCtx = clientCtx.WithUseLedger(useLedger)
+	}
+
+	if !clientCtx.UseHsm || flagSet.Changed(flags.FlagUseHsm) {
+		useHsm, _ := flagSet.GetBool(flags.FlagUseHsm)
+		clientCtx = clientCtx.WithUseHsm(useHsm)
 	}
 
 	if clientCtx.BroadcastMode == "" || flagSet.Changed(flags.FlagBroadcastMode) {

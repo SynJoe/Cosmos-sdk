@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 
 	bip39 "github.com/cosmos/go-bip39"
@@ -19,6 +20,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keys/multisig"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	hsmkeys "github.com/regen-network/keystone/keys"
 )
 
 const (
@@ -34,6 +36,10 @@ const (
 
 	// DefaultKeyPass contains the default key password for genesis transactions
 	DefaultKeyPass = "12345678"
+	
+	// The name for the pkcs11 config file (should be in the
+	// homedir)
+	PKCS11_CONFIG = "pkcs11-config"
 )
 
 // AddKeyCommand defines a keys command to add a generated or recovered private key to keybase.
@@ -70,6 +76,7 @@ Example:
 	f.String(FlagPublicKey, "", "Parse a public key in JSON format and saves key info to <name> file.")
 	f.BoolP(flagInteractive, "i", false, "Interactively prompt user for BIP39 passphrase and mnemonic")
 	f.Bool(flags.FlagUseLedger, false, "Store a local reference to a private key on a Ledger device")
+	f.Bool(flags.FlagUseHsm, false, "Store a local reference to a private key on an HSM device")
 	f.Bool(flagRecover, false, "Provide seed phrase to recover existing key instead of creating")
 	f.Bool(flagNoBackup, false, "Don't print out seed phrase (if others are watching the terminal)")
 	f.Bool(flags.FlagDryRun, false, "Perform action, but don't add key to local keystore")
@@ -114,7 +121,7 @@ func RunAddCmd(ctx client.Context, cmd *cobra.Command, args []string, inBuf *buf
 	showMnemonic := !noBackup
 	kb := ctx.Keyring
 
-	keyringAlgos, _ := kb.SupportedAlgorithms()
+	keyringAlgos, _, _ := kb.SupportedAlgorithms()
 	algoStr, _ := cmd.Flags().GetString(flags.FlagKeyAlgorithm)
 	algo, err := keyring.NewSigningAlgoFromString(algoStr, keyringAlgos)
 	if err != nil {
@@ -189,11 +196,12 @@ func RunAddCmd(ctx client.Context, cmd *cobra.Command, args []string, inBuf *buf
 	index, _ := cmd.Flags().GetUint32(flagIndex)
 	hdPath, _ := cmd.Flags().GetString(flagHDPath)
 	useLedger, _ := cmd.Flags().GetBool(flags.FlagUseLedger)
-
+        useHsm, _ := cmd.Flags().GetBool(flags.FlagUseHsm)
+	
 	if len(hdPath) == 0 {
 		hdPath = hd.CreateHDPath(coinType, account, index).String()
-	} else if useLedger {
-		return errors.New("cannot set custom bip32 path with ledger")
+	} else if useLedger || useHsm {
+		return errors.New("cannot set custom bip32 path with this device")
 	}
 
 	// If we're using ledger, only thing we need is the path and the bech32 prefix.
@@ -206,6 +214,45 @@ func RunAddCmd(ctx client.Context, cmd *cobra.Command, args []string, inBuf *buf
 		}
 
 		return printCreate(cmd, info, false, "")
+	}
+
+	if useHsm {
+
+		label, err := hsmkeys.CryptoRandomBytes(16)
+
+		if err != nil {
+			return err
+		}
+		
+		nodeHome, err := cmd.Flags().GetString(flags.FlagHome)
+
+		if err != nil {
+			return err
+		}
+
+		configPath :=  filepath.Join(nodeHome, "config", PKCS11_CONFIG)
+		fmt.Printf("PKCS11 config: %s", configPath )
+		
+		kr, err := hsmkeys.NewPkcs11FromConfig(configPath)
+		
+		if err != nil {
+			return err
+		}
+
+		key, err := kr.NewKey(hsmkeys.KEYGEN_SECP256K1, string(label))
+		if err != nil || key == nil {
+			return err
+		}
+
+		key = nil
+		
+		k, err := kb.SaveHsmKey(name, hd.Secp256k1, string(label), configPath)
+
+		if err != nil {
+			return err
+		}
+
+		return printCreate(cmd, k, false, "")
 	}
 
 	// Get bip39 mnemonic
