@@ -25,6 +25,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	hsmkeys "github.com/regen-network/keystone/keys"
 )
 
 // Backend options for Keyring
@@ -54,7 +55,7 @@ type Keyring interface {
 	List() ([]Info, error)
 
 	// Supported signing algorithms for Keyring and Ledger respectively.
-	SupportedAlgorithms() (SigningAlgoList, SigningAlgoList)
+	SupportedAlgorithms() (SigningAlgoList, SigningAlgoList, SigningAlgoList)
 
 	// Key and KeyByAddress return keys by uid and address respectively.
 	Key(uid string) (Info, error)
@@ -78,6 +79,9 @@ type Keyring interface {
 
 	// SaveLedgerKey retrieves a public key reference from a Ledger device and persists it.
 	SaveLedgerKey(uid string, algo SignatureAlgo, hrp string, coinType, account, index uint32) (Info, error)
+
+	// SaveHsmKey retrieves a public key reference from a PKCS11 device, such as an HSM, ran persists it
+	SaveHsmKey(uid string, algo SignatureAlgo, label string, configPath string) (*hsmInfo, error)
 
 	// SavePubKey stores a public key and returns the persisted Info structure.
 	SavePubKey(uid string, pubkey types.PubKey, algo hd.PubKeyType) (Info, error)
@@ -151,6 +155,8 @@ type Options struct {
 	SupportedAlgos SigningAlgoList
 	// supported signing algorithms for Ledger
 	SupportedAlgosLedger SigningAlgoList
+	// ...and for HSM
+	SupportedAlgosHsm SigningAlgoList
 }
 
 // NewInMemory creates a transient keyring useful for testing
@@ -205,6 +211,7 @@ func newKeystore(kr keyring.Keyring, opts ...Option) keystore {
 	options := Options{
 		SupportedAlgos:       SigningAlgoList{hd.Secp256k1},
 		SupportedAlgosLedger: SigningAlgoList{hd.Secp256k1},
+		SupportedAlgosHsm:    SigningAlgoList{hd.Secp256k1},
 	}
 
 	for _, optionFn := range opts {
@@ -378,6 +385,43 @@ func (ks keystore) SignByAddress(address sdk.Address, msg []byte) ([]byte, types
 	}
 
 	return ks.Sign(key.GetName(), msg)
+}
+
+// SaveHsmKey will check whether a key with the given uid exists on
+// the HSM, and retrieve its pub key if so, persisting it in the local
+// keyring backend.
+// the config path is passed in, so anyone using this key must also have access
+// to the HSM that contains the key with that label
+func (ks keystore) SaveHsmKey(uid string, algo SignatureAlgo, label string, configPath string) (*hsmInfo, error) {
+	if !ks.options.SupportedAlgosHsm.Contains(algo) {
+		return nil, fmt.Errorf(
+			"%w: signature algo %s is not defined in the keyring options",
+			ErrUnsupportedSigningAlgo, algo.Name(),
+		)
+	}
+
+	kr, err := hsmkeys.NewPkcs11FromConfig(configPath)
+
+	if err != nil {
+		return nil, err
+	}
+
+	priv, err := kr.Key(label)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to retrieve HSM key: %w", err)
+	}
+
+	pub := priv.PubKey()
+
+	return ks.writeHsmKey(uid, pub, label, configPath, algo)
+}
+
+// writeHsm creates a new Hsm Info object containing the key label
+// for the private key, and the actual Cosmos keyring PubKey
+func (ks keystore) writeHsmKey(name string, pub types.PubKey, label string, configPath string, algo SignatureAlgo) (*hsmInfo, error) {
+	k := newHsmInfo(name, pub, label, configPath, algo.Name())
+	return k, ks.writeInfo(k)
 }
 
 func (ks keystore) SaveLedgerKey(uid string, algo SignatureAlgo, hrp string, coinType, account, index uint32) (Info, error) {
@@ -574,8 +618,8 @@ func (ks keystore) Key(uid string) (Info, error) {
 
 // SupportedAlgorithms returns the keystore Options' supported signing algorithm.
 // for the keyring and Ledger.
-func (ks keystore) SupportedAlgorithms() (SigningAlgoList, SigningAlgoList) {
-	return ks.options.SupportedAlgos, ks.options.SupportedAlgosLedger
+func (ks keystore) SupportedAlgorithms() (SigningAlgoList, SigningAlgoList, SigningAlgoList) {
+	return ks.options.SupportedAlgos, ks.options.SupportedAlgosLedger, ks.options.SupportedAlgosHsm
 }
 
 // SignWithLedger signs a binary message with the ledger device referenced by an Info object
@@ -604,6 +648,38 @@ func SignWithLedger(info Info, msg []byte) (sig []byte, pub types.PubKey, err er
 	}
 
 	return sig, priv.PubKey(), nil
+}
+
+func SignWithHsm(info *hsmInfo, msg []byte) (sig []byte, pub types.PubKey, err error) {
+	//	switch hsminfo := info.(type) {
+	//case *hsmInfo, hsmInfo:
+
+	label := info.GetLabel()
+	
+	configPath := info.GetConfigPath()
+	
+	kr, err := hsmkeys.NewPkcs11FromConfig(configPath)
+	
+	if err != nil {
+		return nil, nil, err
+	}
+	
+	priv, err := kr.Key(label)
+	
+	if err != nil {
+		return nil, nil, err
+	}
+	
+	signed, err := priv.Sign(msg, nil)
+	
+	if err != nil {
+		return nil, nil, err
+	}
+	
+	return signed, priv.PubKey(), nil
+	//default:
+		return nil, nil, errors.New("not an HSM object")
+	//}
 }
 
 func newOSBackendKeyringConfig(appName, dir string, buf io.Reader) keyring.Config {

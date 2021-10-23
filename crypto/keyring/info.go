@@ -32,6 +32,7 @@ var (
 	_ Info = &ledgerInfo{}
 	_ Info = &offlineInfo{}
 	_ Info = &multiInfo{}
+	_ Info = &hsmInfo{}
 )
 
 // localInfo is the public information about a locally stored key
@@ -80,6 +81,65 @@ func (i localInfo) GetAlgo() hd.PubKeyType {
 // GetType implements Info interface
 func (i localInfo) GetPath() (*hd.BIP44Params, error) {
 	return nil, fmt.Errorf("BIP44 Paths are not available for this type")
+}
+
+// hsmInfo contains the public information about an HSM-resident key
+
+type hsmInfo struct {
+	Name       string               `json:"name"`
+	PubKey     cryptotypes.PubKey   `json:"pubkey"`
+	Label      string               `json:"label"`
+	ConfigPath string               `json:"configpath"`
+	Algo       hd.PubKeyType        `json:"algo"`
+}
+
+// newHsmInfo returns an info record with the given HSM details filled out. 
+func newHsmInfo(name string, pub cryptotypes.PubKey, label string, configPath string, algo hd.PubKeyType) *hsmInfo{
+	return &hsmInfo{
+		Name:   name,
+		PubKey: pub,
+		Label: label,
+		ConfigPath: configPath,
+		Algo: algo,
+	}
+}
+
+// GetType implements Info interface
+func (i hsmInfo) GetType() KeyType {
+	return TypeLedger
+}
+
+// GetName implements Info interface
+func (i hsmInfo) GetName() string {
+	return i.Name
+}
+
+// GetPubKey implements Info interface
+func (i hsmInfo) GetPubKey() cryptotypes.PubKey {
+	return i.PubKey
+}
+
+// GetAddress implements Info interface
+func (i hsmInfo) GetAddress() types.AccAddress {
+	return i.PubKey.Address().Bytes()
+}
+
+// GetAlgo implements Info interface
+func (i hsmInfo) GetAlgo() hd.PubKeyType {
+	return i.Algo
+}
+
+// GetPath implements Info interface
+func (i hsmInfo) GetPath() (*hd.BIP44Params, error) {
+	return nil, fmt.Errorf("BIP44 Paths are not available for this type")
+}
+
+func (i hsmInfo) GetLabel() string {
+	return i.Label
+}
+
+func (i hsmInfo) GetConfigPath() string {
+	return i.ConfigPath
 }
 
 // ledgerInfo is the public information about a Ledger key
