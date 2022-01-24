@@ -34,7 +34,7 @@ func NewInt64Coin(denom string, amount int64) Coin {
 
 // String provides a human-readable representation of a coin
 func (coin Coin) String() string {
-	return fmt.Sprintf("%v%v", coin.Amount, coin.Denom)
+	return fmt.Sprintf("%v%s", coin.Amount, coin.Denom)
 }
 
 // Validate returns an error if the Coin has a negative amount or if
@@ -144,6 +144,11 @@ func (coin Coin) IsNegative() bool {
 	return coin.Amount.Sign() == -1
 }
 
+// IsNil returns true if the coin amount is nil and false otherwise.
+func (coin Coin) IsNil() bool {
+	return coin.Amount.i == nil
+}
+
 //-----------------------------------------------------------------------------
 // Coins
 
@@ -185,13 +190,18 @@ func (coins Coins) MarshalJSON() ([]byte, error) {
 func (coins Coins) String() string {
 	if len(coins) == 0 {
 		return ""
+	} else if len(coins) == 1 {
+		return coins[0].String()
 	}
 
-	out := ""
-	for _, coin := range coins {
-		out += fmt.Sprintf("%v,", coin.String())
+	// Build the string with a string builder
+	var out strings.Builder
+	for _, coin := range coins[:len(coins)-1] {
+		out.WriteString(coin.String())
+		out.WriteByte(',')
 	}
-	return out[:len(out)-1]
+	out.WriteString(coins[len(coins)-1].String())
+	return out.String()
 }
 
 // Validate checks that the Coins are sorted, have positive amount, with a valid and unique
@@ -585,6 +595,19 @@ func (coins Coins) IsAnyNegative() bool {
 	return false
 }
 
+// IsAnyNil returns true if there is at least one coin whose amount
+// is nil; returns false otherwise. It returns false if the coin set
+// is empty too.
+func (coins Coins) IsAnyNil() bool {
+	for _, coin := range coins {
+		if coin.IsNil() {
+			return true
+		}
+	}
+
+	return false
+}
+
 // negative returns a set of coins with all amount negative.
 //
 // TODO: Remove once unsigned integers are used.
@@ -603,7 +626,18 @@ func (coins Coins) negative() Coins {
 
 // removeZeroCoins removes all zero coins from the given coin set in-place.
 func removeZeroCoins(coins Coins) Coins {
-	result := make([]Coin, 0, len(coins))
+	for i := 0; i < len(coins); i++ {
+		if coins[i].IsZero() {
+			break
+		} else if i == len(coins)-1 {
+			return coins
+		}
+	}
+
+	var result []Coin
+	if len(coins) > 0 {
+		result = make([]Coin, 0, len(coins)-1)
+	}
 
 	for _, coin := range coins {
 		if !coin.IsZero() {
