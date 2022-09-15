@@ -8,7 +8,7 @@ codec.go file as follows:
 	func init() {
 		// ...
 		RegisterLegacyAminoCodec(govcodec.Amino)
-	RegisterLegacyAminoCodec(groupcodec.Amino)
+		RegisterLegacyAminoCodec(groupcodec.Amino)
 	}
 
 The codec instance is put inside this package and not the x/gov/types package in order to avoid any dependency cycle.
