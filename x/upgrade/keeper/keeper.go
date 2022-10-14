@@ -3,7 +3,7 @@ package keeper
 import (
 	"encoding/binary"
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -25,6 +25,12 @@ import (
 // UpgradeInfoFileName file to store upgrade information
 const UpgradeInfoFileName string = "upgrade-info.json"
 
+// upgrade defines a comparable structure for sorting upgrades.
+type upgrade struct {
+	Name        string
+	BlockHeight int64
+}
+
 type Keeper struct {
 	homePath           string                          // root directory of app config
 	skipUpgradeHeights map[int64]bool                  // map of heights to skip for an upgrade
@@ -32,6 +38,7 @@ type Keeper struct {
 	cdc                codec.BinaryCodec               // App-wide binary codec
 	upgradeHandlers    map[string]types.UpgradeHandler // map of plan name to upgrade handler
 	versionSetter      xp.ProtocolVersionSetter        // implements setting the protocol version field on BaseApp
+	downgradeVerified  bool                            // tells if we've already sanity checked that this binary version isn't being used against an old state.
 }
 
 // NewKeeper constructs an upgrade Keeper which requires the following arguments:
@@ -169,7 +176,9 @@ func (k Keeper) ScheduleUpgrade(ctx sdk.Context, plan types.Plan) error {
 		return err
 	}
 
-	if plan.Height <= ctx.BlockHeight() {
+	// NOTE: allow for the possibility of chains to schedule upgrades in begin block of the same block
+	// as a strategy for emergency hard fork recoveries
+	if plan.Height < ctx.BlockHeight() {
 		return sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "upgrade cannot be scheduled in the past")
 	}
 
@@ -226,6 +235,36 @@ func (k Keeper) GetUpgradedConsensusState(ctx sdk.Context, lastHeight int64) ([]
 	}
 
 	return bz, true
+}
+
+// GetLastCompletedUpgrade returns the last applied upgrade name and height.
+func (k Keeper) GetLastCompletedUpgrade(ctx sdk.Context) (string, int64) {
+	iter := sdk.KVStoreReversePrefixIterator(ctx.KVStore(k.storeKey), []byte{types.DoneByte})
+	defer iter.Close()
+
+	var (
+		latest upgrade
+		found  bool
+	)
+	for ; iter.Valid(); iter.Next() {
+		upgradeHeight := int64(sdk.BigEndianToUint64(iter.Value()))
+		if !found || upgradeHeight >= latest.BlockHeight {
+			found = true
+			name := parseDoneKey(iter.Key())
+			latest = upgrade{Name: name, BlockHeight: upgradeHeight}
+		}
+	}
+
+	return latest.Name, latest.BlockHeight
+}
+
+// parseDoneKey - split upgrade name from the done key
+func parseDoneKey(key []byte) string {
+	if len(key) < 2 {
+		panic(fmt.Sprintf("expected key of length at least %d, got %d", 2, len(key)))
+	}
+
+	return string(key[1:])
 }
 
 // GetDoneHeight returns the height at which the given upgrade was executed
@@ -353,7 +392,7 @@ func (k Keeper) DumpUpgradeInfoWithInfoToDisk(height int64, name string, info st
 		return err
 	}
 
-	return ioutil.WriteFile(upgradeInfoFilePath, bz, 0600)
+	return os.WriteFile(upgradeInfoFilePath, bz, 0o600)
 }
 
 // GetUpgradeInfoPath returns the upgrade info file path
@@ -384,7 +423,7 @@ func (k Keeper) ReadUpgradeInfoFromDisk() (store.UpgradeInfo, error) {
 		return upgradeInfo, err
 	}
 
-	data, err := ioutil.ReadFile(upgradeInfoPath)
+	data, err := os.ReadFile(upgradeInfoPath)
 	if err != nil {
 		// if file does not exist, assume there are no upgrades
 		if os.IsNotExist(err) {
@@ -409,4 +448,14 @@ type upgradeInfo struct {
 	Height int64 `json:"height,omitempty"`
 	// Height has types.Plan.Height value
 	Info string `json:"info,omitempty"`
+}
+
+// SetDowngradeVerified updates downgradeVerified.
+func (k *Keeper) SetDowngradeVerified(v bool) {
+	k.downgradeVerified = v
+}
+
+// DowngradeVerified returns downgradeVerified.
+func (k Keeper) DowngradeVerified() bool {
+	return k.downgradeVerified
 }
