@@ -35,7 +35,20 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 # Changelog
 
-## [Unreleased]
+
+## v0.44.2-regen-1
+
++ Merged Cosmos-SDK v0.44.2
+
+## v0.44.0-regen-1
+
+### Features
+
+* [#42](https://github.com/regen-network/cosmos-sdk/pull/42) Add `MsgCreatePermanentLockedAccount` and CLI method for creating permanent locked account.
+
+## [v0.44.2](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.44.2) - 2021-10-12
+
+Security Release. No breaking changes related to 0.44.x.
 
 ## v0.45.9 - 2022-10-14
 
