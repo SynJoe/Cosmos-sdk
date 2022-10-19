@@ -5,12 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module/testutil"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/cosmos/cosmos-sdk/x/group"
 	"github.com/cosmos/cosmos-sdk/x/group/module"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -972,7 +973,8 @@ func TestMsgSubmitProposalGetSignBytes(t *testing.T) {
 		expSignBz string
 	}{
 		{
-			"MsgSend", []sdk.Msg{banktypes.NewMsgSend(member1, member1, sdk.NewCoins())},
+			"MsgSend",
+			[]sdk.Msg{banktypes.NewMsgSend(member1, member1, sdk.NewCoins())},
 			fmt.Sprintf(`{"type":"cosmos-sdk/group/MsgSubmitProposal","value":{"messages":[{"type":"cosmos-sdk/MsgSend","value":{"amount":[],"from_address":"%s","to_address":"%s"}}],"proposers":[""]}}`, member1, member1),
 		},
 	}
