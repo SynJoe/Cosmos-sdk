@@ -3,7 +3,7 @@ module cosmossdk.io/log
 go 1.19
 
 require (
-	github.com/cometbft/cometbft v0.37.0-alpha.3
+	github.com/cometbft/cometbft v0.37.0
 	github.com/rs/zerolog v1.29.0
 )
 
