@@ -3,7 +3,7 @@ module cosmossdk.io/tools/rosetta
 go 1.19
 
 require (
-	cosmossdk.io/log v0.0.0-20230219145338-9553bf1eec78
+	cosmossdk.io/log v1.0.0
 	cosmossdk.io/math v1.0.0-beta.6.0.20230216172121-959ce49135e4
 	github.com/coinbase/rosetta-sdk-go/types v1.0.0
 	github.com/cometbft/cometbft v0.37.0-alpha.3
@@ -91,7 +91,7 @@ require (
 	github.com/linxGnu/grocksdb v1.7.14 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.17 // indirect
+	github.com/mattn/go-isatty v0.0.18 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mimoo/StrobeGo v0.0.0-20210601165009-122bf33a46e0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -123,7 +123,7 @@ require (
 	golang.org/x/crypto v0.6.0 // indirect
 	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb // indirect
 	golang.org/x/net v0.7.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
+	golang.org/x/sys v0.6.0 // indirect
 	golang.org/x/term v0.5.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
 	google.golang.org/genproto v0.0.0-20230202175211-008b39050e57 // indirect
